@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  API:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowHeaders: '''*'''
+        AllowOrigin: '''*'''
+    Metadata:
+      SamResourceId: API
+  AddSample:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/samples/AddSample.handler
+      Runtime: nodejs20.x
+      Events:
+        GetEvent:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: API
+            Path: /samples
+            Method: POST
+      CodeUri: s3://isu-geo-api/10afc6ccbe3a48bcbed4ce41b5e3ffb2
+    Metadata:
+      SamResourceId: AddSample
+  GetSample:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/GetSample.handler
+      Runtime: nodejs20.x
+      Events:
+        PostEvent:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: API
+            Path: /samples/{sample_id}
+            Method: GET
+      CodeUri: s3://isu-geo-api/10afc6ccbe3a48bcbed4ce41b5e3ffb2
+    Metadata:
+      SamResourceId: GetSample
+  ListSamples:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/ListSamples.handler
+      Runtime: nodejs20.x
+      Events:
+        PostEvent:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: API
+            Path: /samples
+            Method: GET
+      CodeUri: s3://isu-geo-api/10afc6ccbe3a48bcbed4ce41b5e3ffb2
+    Metadata:
+      SamResourceId: ListSamples
+Outputs:
+  ApiEndpoint:
+    Description: URL of the API endpoint
+    Value:
+      Fn::Sub: https://${API}.execute-api.${AWS::Region}.amazonaws.com/prod/
+    Export:
+      Name: ApiEndPoint

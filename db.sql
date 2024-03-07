@@ -1,0 +1,31 @@
+CREATE TABLE sample (
+  id SERIAL PRIMARY KEY,
+  sample_id VARCHAR(255) NOT NULL,
+  category VARCHAR(255) NOT NULL,
+  collector_name VARCHAR(255) NOT NULL,
+  advisor_name VARCHAR(255),
+  advisor_other_name VARCHAR(255),
+  collection_year INTEGER,
+  collection_reason VARCHAR(255)[] DEFAULT ARRAY[]::VARCHAR(255)[],
+  collection_reason_other VARCHAR(255),
+  collection_location VARCHAR(255)[] DEFAULT ARRAY[]::VARCHAR(255)[],
+  short_description TEXT,
+  long_description TEXT,
+  sample_form VARCHAR(255)[] DEFAULT ARRAY[]::VARCHAR(255)[],
+  sample_form_other VARCHAR(255),
+  sample_type VARCHAR(255)[] DEFAULT ARRAY[]::VARCHAR(255)[],
+  sample_type_other VARCHAR(255),
+  sample_img VARCHAR(255),
+  storage_building VARCHAR(255),
+  storage_room VARCHAR(255),
+  storage_details VARCHAR(255),
+  storage_duration INTEGER,
+  location_rectangle_south DOUBLE PRECISION,
+  location_rectangle_west DOUBLE PRECISION,
+  location_rectangle_north DOUBLE PRECISION,
+  location_rectangle_east DOUBLE PRECISION,
+  location_marker_lat DOUBLE PRECISION,
+  location_marker_lng DOUBLE PRECISION
+);
+
+TODO: add advisorOtherName
