@@ -1,9 +1,7 @@
 // index.ts
 import { APIGatewayEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
-import { Pool, QueryResult } from 'pg';
-import { createPool, responseError, responseOK } from './Utils';
-
-let pool: Pool | null = null;
+import { QueryResult } from 'pg';
+import { responseError, responseOK, getPoolClient } from './Utils';
 
 export const handler = async (
     event: APIGatewayEvent,
@@ -15,9 +13,7 @@ export const handler = async (
             return responseError(400, 'Missing "sample_id" parameter in the path');
         }
 
-        if (pool == null) pool = await createPool();
-
-        const client = await pool.connect();
+        const client = await getPoolClient();
         try {
             const query = 'DELETE FROM sample where id = $1';
             const values = [sampleId];

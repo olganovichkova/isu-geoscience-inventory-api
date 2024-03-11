@@ -6,24 +6,50 @@ Globals:
     Timeout: 90
     Environment:
       Variables:
-        RDSSecretKey: !Ref RDSSecretKey
+        STACK_BASE_NAME: !Ref StackBaseName
+        DB_SECRET_KEY: !Ref DBSecretKey
+        DB_HOST_NAME: !GetAtt RDS.Endpoint.Address
+        DB_PORT: !GetAtt RDS.Endpoint.Port
+        DB_NAME: !Ref DBName
 
 Parameters:
 
-  DBInstanceIdentifier:
+  StackBaseName:
     Type: String
-    Default: "isu-geo-db"
+    Default: "isu-geo"
+
+  StackEnvironment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Deployment environment
 
   DBName:
     Type: String
     Default: "isu_geo_db"
 
-  RDSSecretKey:
+  DBSecretKey:
     Type: String
-    Default: "isu-geo-db"
-
+    Default: "/isu-geo/default/postgres/credentials"
+  
+  WebAppRedirectUrl:
+    Type: String
+    Default: "http://localhost:3000/login"
 
 Resources:
+
+  S3DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:  !Sub "${StackBaseName}-data-${StackEnvironment}" 
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedOrigins: ["*"]
+            AllowedMethods: [GET, PUT, POST]            
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -35,17 +61,17 @@ Resources:
           ToPort: 5432
           CidrIp: "0.0.0.0/0" 
 
-  RDS:
+  RDS:  
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Ref DBInstanceIdentifier    
+      DBInstanceIdentifier: !Sub "${StackBaseName}-db-${StackEnvironment}"
       AllocatedStorage: 20
       DBInstanceClass: db.t3.micro
       Engine: postgres
       PubliclyAccessible: true
       DBName: !Ref DBName
-      MasterUsername: !Join [ "", [ "{{resolve:secretsmanager:", !Ref RDSSecretKey, ":SecretString:user}}" ] ]
-      MasterUserPassword: !Join [ "", [ "{{resolve:secretsmanager:", !Ref RDSSecretKey, ":SecretString:password}}" ] ]
+      MasterUsername: !Join [ "", [ "{{resolve:secretsmanager:", !Ref DBSecretKey, ":SecretString:username}}" ] ]
+      MasterUserPassword: !Join [ "", [ "{{resolve:secretsmanager:", !Ref DBSecretKey, ":SecretString:password}}" ] ]
       VPCSecurityGroups:
         - !GetAtt RDSSecurityGroup.GroupId
     DeletionPolicy: Snapshot
@@ -54,7 +80,7 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: "isu-geo-userpool"
+      UserPoolName: !Sub "${StackBaseName}-userpool-${StackEnvironment}"
       UsernameAttributes:
         - email
       AutoVerifiedAttributes:
@@ -67,46 +93,39 @@ Resources:
           RequireSymbols: false
           RequireUppercase: true
 
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain:  !Sub "${StackBaseName}-${StackEnvironment}"
+      UserPoolId: !Ref UserPool
+
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
+    DependsOn: 
+      - UserPool
+      - API
     Properties:
+      ClientName: !Sub "${StackBaseName}-userpool-client-${StackEnvironment}" 
       UserPoolId: !Ref UserPool
       GenerateSecret: false
       ExplicitAuthFlows:
         - ALLOW_USER_PASSWORD_AUTH
         - ALLOW_ADMIN_USER_PASSWORD_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
-
-# set cognito domain
-  # UserPoolDomain:
-  #   Type: AWS::Cognito::UserPoolDomain
-  #   Properties:
-  #     Domain: "isu-geo-userpool"
-  #     UserPoolId: !Ref UserPool
-
-
-#set hosted UI
-  # HostedUI:
-  #   Type: AWS::Cognito::UserPoolUICustomizationAttachment
-  #   Properties:
-  #     ClientId: !Ref UserPoolClient
-  #     UserPoolId: !Ref UserPool
-
-
-  S3DataBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: "isu-geo-data-dev"
-      CorsConfiguration:
-        CorsRules:
-          - AllowedHeaders: ["*"]
-            AllowedOrigins: ["*"]
-            AllowedMethods: [GET, PUT, POST]      
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+      CallbackURLs:
+        - !Sub https://${API}.execute-api.${AWS::Region}.amazonaws.com/${StackEnvironment}/ui/login
+      SupportedIdentityProviders:
+        - COGNITO
 
   API:
     Type: AWS::Serverless::Api
     Properties:
-      StageName: prod
+      Name: !Sub "${StackBaseName}-apigateway-${StackEnvironment}" 
+      StageName: !Ref StackEnvironment
       Cors:
         AllowMethods: "'GET,POST,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
@@ -114,7 +133,7 @@ Resources:
       Auth:
         Authorizers:
           APIAuthorizer:
-            UserPoolArn: !GetAtt "UserPool.Arn"        
+            UserPoolArn: !GetAtt UserPool.Arn
 
   GetSample:
     Type: AWS::Serverless::Function
@@ -200,9 +219,9 @@ Resources:
         - AWSLambdaBasicExecutionRole
         - SecretsManagerReadWrite
         - AmazonS3FullAccess
+        - AmazonSSMReadOnlyAccess
       Environment:
         Variables:
-          HOST_NAME: !GetAtt RDS.Endpoint.Address
           DATA_BUCKET: !Ref S3DataBucket      
       Runtime: nodejs20.x
       Events:
@@ -247,8 +266,6 @@ Resources:
         Sourcemap: true
         EntryPoints: 
         - DeleteSample.ts
-
-
 
   SearchByLocation:
     Type: AWS::Serverless::Function
@@ -335,12 +352,7 @@ Resources:
       Policies:
         - AWSLambdaBasicExecutionRole
         - SecretsManagerReadWrite
-        - AmazonCognitoPowerUser
-      Environment:
-        Variables:
-          HOST_NAME: !GetAtt RDS.Endpoint.Address
-          USER_POOL_CLIENT_ID: !GetAtt UserPoolClient.ClientId
-          USER_POOL_ID: !Ref UserPool
+        - AmazonCognitoPowerUser        
       Runtime: nodejs20.x
       Events:
         GetEvent:
@@ -368,11 +380,10 @@ Resources:
         - AWSLambdaBasicExecutionRole
         - SecretsManagerReadWrite
         - AmazonCognitoPowerUser
+        - AmazonSSMReadOnlyAccess
       Environment:
         Variables:
-          HOST_NAME: !GetAtt RDS.Endpoint.Address
-          USER_POOL_CLIENT_ID: !GetAtt UserPoolClient.ClientId
-          USER_POOL_ID: !Ref UserPool
+          WEB_APP_REDIRECT_URL: !Ref WebAppRedirectUrl
       Runtime: nodejs20.x
       Events:
         GetEvent:
@@ -403,7 +414,6 @@ Resources:
         - AmazonS3FullAccess
       Environment:
         Variables:
-          HOST_NAME: !GetAtt RDS.Endpoint.Address
           DATA_BUCKET: !Ref S3DataBucket      
       Runtime: nodejs20.x
       Events:
@@ -422,11 +432,43 @@ Resources:
         EntryPoints: 
         - GetPresignedURL.ts
 
+  UserPoolIdParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub "/${StackBaseName}/${StackEnvironment}/userpool/id"
+      Type: "String"
+      Value: !Ref UserPool
+
+  UserPoolClientIdParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub "/${StackBaseName}/${StackEnvironment}/userpool/client/id"
+      Type: "String"
+      Value: !GetAtt UserPoolClient.ClientId
+
+  UserPoolDomainParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub "/${StackBaseName}/${StackEnvironment}/userpool/domain"
+      Type: "String"
+      Value: !Ref UserPoolDomain
+
+  ApiEndPointParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub "/${StackBaseName}/${StackEnvironment}/api/endpoint"
+      Type: "String"
+      Value: !Sub "https://${API}.execute-api.${AWS::Region}.amazonaws.com/${StackEnvironment}"     
+
 Outputs:
   RDSEndpoint:
     Description: RDS Endpoint
     Value: !Sub "${RDS.Endpoint.Address}:${RDS.Endpoint.Port}"
-  ApiEndpoint:
+    Export:
+      Name: RDSEndpoint
+
+  APIEndpoint:
     Description: URL of the API endpoint
-    Value: !Sub https://${API}.execute-api.${AWS::Region}.amazonaws.com/prod/
- 
+    Value: !Sub https://${API}.execute-api.${AWS::Region}.amazonaws.com/${StackEnvironment}/
+    Export:
+      Name: APIEndpoint

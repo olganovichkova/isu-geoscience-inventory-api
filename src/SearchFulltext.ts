@@ -1,9 +1,7 @@
 // index.ts
 import { APIGatewayEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
-import { Pool, QueryResult } from 'pg';
-import { createPool, buildSamples, responseError, responseOK } from './Utils';
-
-let pool: Pool | null = null;
+import { QueryResult } from 'pg';
+import { getPoolClient, buildSamples, responseError, responseOK, PROP_FILED_MAP } from './Utils';
 
 export const handler = async (
     event: APIGatewayEvent,
@@ -20,37 +18,27 @@ export const handler = async (
             return responseError(400, 'searchterm parameter is missing');
         }
 
-        if (pool == null) pool = await createPool();
-        const client = await pool.connect();
+        const client = await getPoolClient();
 
         try {
-            const prop_field_map: { [key: string]: string } = {
-                "category": "category",
-                "collectorName": "collector_name",
-                "advisorName": "advisor_name",
-                // "collectionYear": "collection_year",
-                // "collectionReason": "collection_reason",
-                // "sampleForm": "sample_form",
-                // "sampleType": "sample_type",
-                "storageBuilding": "storage_building",
-                "storageRoom": "storage_room"
-            };
-            const props: string[] = Object.keys(prop_field_map);
             const conditions: string[] = [];
             const values: string[] = [];
 
-            for (let i = 0; i < props.length; i++) {
-                const prop = props[i];
-                conditions.push(`${prop_field_map[prop]} like $1`)
-            }
+            for (let prop of Object.keys(PROP_FILED_MAP)) {
+                const field = PROP_FILED_MAP[prop];
+                if(field.type == 'string'){
+                    conditions.push(`${field.name} ilike $1`);
+                } else if (field.type == 'string[]'){
+                    conditions.push(`EXISTS (SELECT 1 FROM unnest(${field.name}) AS item WHERE item ILIKE $1)`);
+                }
+            }                
             values.push(`%${textParams.searchterm}%`);
-
 
             let query = `SELECT * FROM sample`;
             if (conditions.length > 0) query += ` WHERE ${conditions.join(' OR ')}`;
 
-            console.log('query:', query);
-            console.log('values:', values);
+            // console.log('query:', query);
+            // console.log('values:', values);
 
             const ret: QueryResult = await client.query(query, values);
             return responseOK(200, buildSamples(ret.rows));

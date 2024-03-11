@@ -1,6 +1,7 @@
 import { APIGatewayEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
+import { SSM } from '@aws-sdk/client-ssm';
 import axios from 'axios';
-import { responseError, responseOK } from './Utils';
+import { getSSMParameter, responseError } from './Utils';
 
 export const handler = async (
     event: APIGatewayEvent,
@@ -13,16 +14,16 @@ export const handler = async (
         if (!code) {
             return responseError(400, '"code" parameter is missing');
         }
+        const { resourcePath, stage } = event.requestContext;
 
-        // const tokenEndpoint = "https://${process.env.USER_POOL_DOMAIN}/oauth2/token"
-        const tokenEndpoint = "https://isu-geo.auth.us-east-1.amazoncognito.com/oauth2/token";
-        // const clientId = process.env.USER_POOL_CLIENT_ID;
-        const clientId = "qm3vkrssecf42c8nj7612oath";
-        const { apiId, path, stage } = event.requestContext;
-        // const redirectUri = `https://${apiId}.execute-api.${process.env.AWS_REGION}.amazonaws.com/${stage}${path}`;
-        const redirectUri = `http://localhost:3001${path}`;
+        const ssm = new SSM();
+        const stackBaseName = process.env.STACK_BASE_NAME;
+        const apiEndPoint = await getSSMParameter(ssm, `/${stackBaseName}/${stage}/api/endpoint`);
+        const clientId = await getSSMParameter(ssm, `/${stackBaseName}/${stage}/userpool/client/id`);
+        const userPoolDomain = await getSSMParameter(ssm, `/${stackBaseName}/${stage}/userpool/domain`);
 
-
+        const tokenEndpoint = `https://${userPoolDomain}.auth.${process.env.AWS_REGION}.amazoncognito.com/oauth2/token`;
+        const redirectUri = `${apiEndPoint}${resourcePath}`;
 
         const tokenResponse = await axios.post(tokenEndpoint, {
             grant_type: 'authorization_code',
@@ -34,17 +35,16 @@ export const handler = async (
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
         });
+
         const { id_token, access_token, refresh_token } = tokenResponse.data;
-
-
-        // Construct the redirect URL with tokens as query parameters
-        const uiRrl = `http://localhost:3000/login?code=${code}&id_token=${id_token}&access_token=${access_token}&refresh_token=${refresh_token}`;
+        const webAppURL = `${process.env.WEB_APP_REDIRECT_URL}?code=${code}&id_token=${id_token}&access_token=${access_token}&refresh_token=${refresh_token}`;
+        console.log('--- webAppURL:', webAppURL);
 
         // Return HTTP 302 Redirect response
         return {
             statusCode: 302,
             headers: {
-                Location: uiRrl,
+                Location: webAppURL,
             },
             body: '',
         };
@@ -54,3 +54,4 @@ export const handler = async (
         return responseError();
     }
 }
+

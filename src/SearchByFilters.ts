@@ -1,9 +1,7 @@
 // index.ts
 import { APIGatewayEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
-import { Pool, QueryResult } from 'pg';
-import { createPool, buildSamples, responseError, responseOK } from './Utils';
-
-let pool: Pool | null = null;
+import { QueryResult } from 'pg';
+import { getPoolClient, buildSamples, responseError, responseOK, PROP_FILED_MAP } from './Utils';
 
 export const handler = async (
     event: APIGatewayEvent,
@@ -16,32 +14,38 @@ export const handler = async (
         }
         const filters = JSON.parse(event.body);
 
-        if (pool == null) pool = await createPool();
-        const client = await pool.connect();
+        const client = await getPoolClient();
         try {
+            const filterProps = [
+                "category",
+                "collectorName",
+                "advisorName",
+                "collectionYear",
+                "collectionReason",
+                "sampleForm",
+                "sampleType",
+                "storageBuilding",
+                "storageRoom"
+            ]
 
-            const prop_field_map: { [key: string]: string } = {
-                "category": "category",
-                "collectorName": "collector_name",
-                "advisorName": "advisor_name",
-                // "collectionYear": "collection_year",
-                // "collectionReason": "collection_reason",
-                // "sampleForm": "sample_form",
-                // "sampleType": "sample_type",
-                "storageBuilding": "storage_building",
-                "storageRoom": "storage_room"
-            };
-            const props: string[] = Object.keys(prop_field_map);
             const conditions: string[] = [];
             const values: string[] = [];
 
             let cIndex = 1;
-            for (let i = 0; i < props.length; i++) {
-                const prop = props[i];
-                if (filters[prop] == null || filters[prop] == '') continue;
+            for (let prop of filterProps) {
+                const field = PROP_FILED_MAP[prop];
 
-                conditions.push(`${prop_field_map[prop]} = $${cIndex++}`)
-                values.push(filters[prop]);
+                if (filters[prop] == null ) continue;
+                if(field.type == 'string' && filters[prop] != ''){
+                    conditions.push(`${field.name} = $${cIndex++}`)
+                    values.push(filters[prop]);
+                } else if(field.type == 'number' && filters[prop] != null){
+                    conditions.push(`${field.name} = $${cIndex++}`)
+                    values.push(filters[prop]);
+                } else if(field.type == 'string[]' && filters[prop] != null){
+                    conditions.push(`$${cIndex++} = ANY(${field.name})`)
+                    values.push(filters[prop]);
+                }
             }
 
             let query = `SELECT * FROM sample`;

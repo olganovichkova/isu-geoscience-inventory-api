@@ -1,6 +1,8 @@
 import { APIGatewayEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
 import { CognitoIdentityProviderClient, AdminInitiateAuthCommand } from '@aws-sdk/client-cognito-identity-provider';
-import { responseError, responseOK } from './Utils';
+import { SSM } from '@aws-sdk/client-ssm';
+import { getSSMParameter, responseError, responseOK } from './Utils';
+
 
 
 
@@ -17,12 +19,19 @@ export const handler = async (
         const { username, password } = JSON.parse(event.body);
         const auth_data = { 'USERNAME': username, 'PASSWORD': password };
 
+        const { stage } = event.requestContext;
+        const ssm = new SSM();
+        const stackBaseName = process.env.STACK_BASE_NAME;
+        const userPoolId = await getSSMParameter(ssm, `/${stackBaseName}/${stage}/userpool/id`);
+        const clientId = await getSSMParameter(ssm, `/${stackBaseName}/${stage}/userpool/client/id`);
+
+
         const provider_client = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION });
         const command = new AdminInitiateAuthCommand({
-            UserPoolId: process.env.USER_POOL_ID,
+            UserPoolId: userPoolId,
             AuthFlow: 'ADMIN_USER_PASSWORD_AUTH',
             AuthParameters: auth_data,
-            ClientId: process.env.USER_POOL_CLIENT_ID
+            ClientId: clientId
         });
 
         const resp = await provider_client.send(command);

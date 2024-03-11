@@ -1,18 +1,16 @@
 // index.ts
 import { APIGatewayEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
-import { Pool, QueryResult } from 'pg';
-import { createPool, buildSamples, responseError, responseOK } from './Utils';
+import { QueryResult } from 'pg';
+import { buildSamples, responseError, responseOK, getPoolClient } from './Utils';
 
-let pool: Pool | null = null;
 
 export const handler = async (
   event: APIGatewayEvent,
   context: Context
 ): Promise<APIGatewayProxyResult> => {
   try {
-    if (pool == null) pool = await createPool();
 
-    const client = await pool.connect();
+    const client = await getPoolClient();
     try {
       const query = 'SELECT * FROM sample ';
       const ret: QueryResult = await client.query(query);

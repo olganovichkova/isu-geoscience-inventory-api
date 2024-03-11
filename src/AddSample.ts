@@ -1,8 +1,6 @@
 import { APIGatewayEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
-import { Pool } from 'pg';
-import { Sample, createPool, insertSample, responseError, responseOK } from './Utils';
+import { Sample, insertSample, responseError, responseOK, getPoolClient } from './Utils';
 
-let pool: Pool | null = null;
 
 export const handler = async (
   event: APIGatewayEvent,
@@ -14,15 +12,12 @@ export const handler = async (
     }
     const sampleData = JSON.parse(event.body) as Sample;
 
-    if (pool == null) pool = await createPool();
-    const client = await pool.connect();
-
+    const client = await getPoolClient();
     try {
       await insertSample(client, sampleData);
       return responseOK(201, {success: true, message: ""});
     } catch (error) {
-      //TODO: e.g. sampleId must be unique
-      return responseError(400, 'Request body is missing');
+      return responseError(400, (error as Error).message);
     } finally {
       client.release();
     }

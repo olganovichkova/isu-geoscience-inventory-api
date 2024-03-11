@@ -2,6 +2,7 @@ import { Pool, QueryResult, PoolClient } from 'pg';
 import { SecretsManagerClient, GetSecretValueCommand,} from "@aws-sdk/client-secrets-manager";
 import { APIGatewayProxyResult } from 'aws-lambda/trigger/api-gateway-proxy';
 import { Readable } from 'stream';
+import { SSM } from '@aws-sdk/client-ssm';
 
 
 export interface Sample {
@@ -23,7 +24,9 @@ export interface Sample {
     sampleTypeOther?: string;
     sampleImg?: string;
     storageBuilding?: string;
+    storageBuildingOther?: string;
     storageRoom?: string;
+    storageRoomOther?: string;
     storageDetails?: string;
     storageDuration?: number;
     locationRectangleBounds?: {
@@ -79,11 +82,64 @@ export interface ResultStatus {
     message: string
 }
 
+export class Field {
+    constructor(public name: string, public type: 'string' | 'string[]' | 'number'){};
+}
+
+export const PROP_FILED_MAP : {[key: string] : Field} = {
+    'sampleId' : new Field('sample_id', 'string'),
+    'category' : new Field('category', 'string'),
+    'collectorName' : new Field('collector_name', 'string'),
+    'advisorName' : new Field('advisor_name', 'string'),
+    'advisorOtherName' : new Field('advisor_other_name', 'string'),
+    'collectionYear' : new Field('collection_year', 'number'),
+    'collectionReason' : new Field('collection_reason', 'string[]'),
+    'collectionReasonOther' : new Field('collection_reason_other', 'string'),
+    'collectionLocation' : new Field('collection_location', 'string[]'),
+    'shortDescription' : new Field('short_description', 'string'),
+    'longDescription' : new Field('long_description', 'string'),
+    'sampleForm' : new Field('sample_form', 'string[]'),
+    'sampleFormOther' : new Field('sample_form_other', 'string'),
+    'sampleType' : new Field('sample_type', 'string[]'),
+    'sampleTypeOther' : new Field('sample_type_other', 'string'),
+    'sampleImg' : new Field('sample_img', 'string'),
+    'storageBuilding' : new Field('storage_building', 'string'),
+    'storageBuildingOther' : new Field('storage_building_other', 'string'),
+    'storageRoom' : new Field('storage_room', 'string'),
+    'storageRoomOther' : new Field('storage_room_other', 'string'),
+    'storageDetails' : new Field('storage_details', 'string'),
+    'storageDuration' : new Field('storage_duration', 'number'),
+    'locationRectangleBounds.south' : new Field('location_rectangle_south', 'number'),
+    'locationRectangleBounds.west' : new Field('location_rectangle_west', 'number'),
+    'locationRectangleBounds.north' : new Field('location_rectangle_north', 'number'),
+    'locationRectangleBounds.east' : new Field('location_rectangle_east', 'number'),
+    'locationMarkerlat' : new Field('location_marker_lat', 'number'),
+    'locationMarkerlng' : new Field('location_marker_lng', 'number')
+}
+
+
 export function buildSamples(dbRows: any[]): Sample[] {
     return dbRows.map(buildSample);
 }
 
 export async function insertSample(client: PoolClient, sampleData: Sample): Promise<QueryResult> {
+
+    const locationRectangleBoundsSouth = sampleData.locationRectangleBounds != null ? 
+        sampleData.locationRectangleBounds.south : 
+        ('locationRectangleBoundsSouth' in sampleData? sampleData.locationRectangleBoundsSouth: null);
+
+    const locationRectangleBoundsWest = sampleData.locationRectangleBounds != null ? 
+        sampleData.locationRectangleBounds.west : 
+        ('locationRectangleBoundsWest' in sampleData? sampleData.locationRectangleBoundsWest: null);
+
+    const locationRectangleBoundsNorth = sampleData.locationRectangleBounds != null ? 
+        sampleData.locationRectangleBounds.north : 
+        ('locationRectangleBoundsNorth' in sampleData? sampleData.locationRectangleBoundsNorth: null);
+
+    const locationRectangleBoundsEast = sampleData.locationRectangleBounds != null ? 
+        sampleData.locationRectangleBounds.east : 
+        ('locationRectangleBoundsEast' in sampleData? sampleData.locationRectangleBoundsEast: null);
+
     const query = `
         insert into sample(
         sample_id,
@@ -103,7 +159,9 @@ export async function insertSample(client: PoolClient, sampleData: Sample): Prom
         sample_type_other,
         sample_img,
         storage_building,
+        storage_building_other,
         storage_room,
+        storage_room_other,
         storage_details,
         storage_duration,
         location_rectangle_south,
@@ -116,7 +174,7 @@ export async function insertSample(client: PoolClient, sampleData: Sample): Prom
         values(
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
         $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-        $21,$22,$23,$24,$25,$26)`;
+        $21,$22,$23,$24,$25,$26,$27,$28)`;
     const values = [
         sampleData.sampleId,
         sampleData.category,
@@ -135,18 +193,26 @@ export async function insertSample(client: PoolClient, sampleData: Sample): Prom
         sampleData.sampleTypeOther,
         sampleData.sampleImg,
         sampleData.storageBuilding,
+        sampleData.storageBuildingOther,
         sampleData.storageRoom,
+        sampleData.storageRoomOther,
         sampleData.storageDetails,
         sampleData.storageDuration,
-        sampleData.locationRectangleBounds != null ? sampleData.locationRectangleBounds.south : null,
-        sampleData.locationRectangleBounds != null ? sampleData.locationRectangleBounds.west : null,
-        sampleData.locationRectangleBounds != null ? sampleData.locationRectangleBounds.north : null,
-        sampleData.locationRectangleBounds != null ? sampleData.locationRectangleBounds.east : null,
+        locationRectangleBoundsSouth,
+        locationRectangleBoundsWest,
+        locationRectangleBoundsNorth,
+        locationRectangleBoundsEast,
         sampleData.locationMarkerlat,
         sampleData.locationMarkerlng
     ];
     const ret: QueryResult = await client.query(query, values);
     return ret;
+}
+
+let pool: Pool | null = null;
+export async function getPoolClient(): Promise<PoolClient>{
+    if (pool == null) pool = await createPool();
+    return await pool.connect();    
 }
 
 export function buildSample(dbRow: any): Sample {
@@ -191,10 +257,16 @@ export async function createPool(): Promise<Pool> {
 }
 
 export async function getDBConfig() {
-    let secret = await getSecret(process.env.AWS_REGION, process.env.RDSSecretKey);
-    let dbConfig = JSON.parse(secret.SecretString);
-    dbConfig.ssl = { rejectUnauthorized: false };
-    return dbConfig;
+    let secret = await getSecret(process.env.AWS_REGION, process.env.DB_SECRET_KEY);
+    let secretData = JSON.parse(secret.SecretString);
+    return {
+        user: secretData.username!,
+        password: secretData.password!,
+        host: process.env.DB_HOST_NAME!,
+        port: Number(process.env.DB_PORT!),
+        database: process.env.DB_NAME!,
+        ssl : { rejectUnauthorized: false }
+    };
 }
 
 export async function getSecretValue(aws_region: string | undefined, secret_name: string | undefined, key: string): Promise<string | undefined> {
@@ -255,3 +327,13 @@ export async function streamToBuffer(stream: Readable): Promise<Buffer> {
       stream.on('error', (error) => reject(error));
     });
   }
+
+  export async function getSSMParameter(ssm:SSM, parameterName:string){
+    const params = {
+        Name: parameterName,
+        WithDecryption: true
+      };
+  
+      const data = await ssm.getParameter(params);
+      return data.Parameter?.Value;
+}  
