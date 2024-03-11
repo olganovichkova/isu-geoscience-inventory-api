@@ -17,7 +17,9 @@ CREATE TABLE sample (
   sample_type_other VARCHAR(255),
   sample_img VARCHAR(255),
   storage_building VARCHAR(255),
+  storage_building_other VARCHAR(255),
   storage_room VARCHAR(255),
+  storage_room_other VARCHAR(255),
   storage_details VARCHAR(255),
   storage_duration INTEGER,
   location_rectangle_south DOUBLE PRECISION,
@@ -25,7 +27,7 @@ CREATE TABLE sample (
   location_rectangle_north DOUBLE PRECISION,
   location_rectangle_east DOUBLE PRECISION,
   location_marker_lat DOUBLE PRECISION,
-  location_marker_lng DOUBLE PRECISION
+  location_marker_lng DOUBLE PRECISION,
+  CONSTRAINT uk_sample_id UNIQUE (sample_id)
 );
 
-TODO: add advisorOtherName
