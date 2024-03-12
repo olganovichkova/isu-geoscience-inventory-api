@@ -10,7 +10,7 @@ export const handler = async (
     if (!event.body) {
       return responseError(400, 'Request body is missing');
     }
-    const sampleData = JSON.parse(event.body) as Sample;
+    const sampleData = JSON.parse(event.body);
 
     const client = await getPoolClient();
     try {

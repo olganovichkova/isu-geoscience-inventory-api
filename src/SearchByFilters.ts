@@ -29,7 +29,7 @@ export const handler = async (
             ]
 
             const conditions: string[] = [];
-            const values: string[] = [];
+            const values: any[] = [];
 
             let cIndex = 1;
             for (let prop of filterProps) {
@@ -39,12 +39,12 @@ export const handler = async (
                 if(field.type == 'string' && filters[prop] != ''){
                     conditions.push(`${field.name} = $${cIndex++}`)
                     values.push(filters[prop]);
-                } else if(field.type == 'number' && filters[prop] != null){
+                } else if(field.type == 'number' && filters[prop] != null && `${filters[prop]}` != ""){
                     conditions.push(`${field.name} = $${cIndex++}`)
-                    values.push(filters[prop]);
-                } else if(field.type == 'string[]' && filters[prop] != null){
+                    values.push(Number(filters[prop]));
+                } else if(field.type == 'string[]' && filters[prop] != null && `${filters[prop]}` != ""){
                     conditions.push(`$${cIndex++} = ANY(${field.name})`)
-                    values.push(filters[prop]);
+                    values.push([filters[prop]]);
                 }
             }
 
