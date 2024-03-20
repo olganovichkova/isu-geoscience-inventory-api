@@ -3,9 +3,13 @@ import {
   SecretsManagerClient,
   GetSecretValueCommand,
 } from "@aws-sdk/client-secrets-manager";
-import { APIGatewayProxyResult } from "aws-lambda/trigger/api-gateway-proxy";
+import {
+  APIGatewayEvent,
+  APIGatewayProxyResult,
+} from "aws-lambda/trigger/api-gateway-proxy";
 import { Readable } from "stream";
 import { SSM } from "@aws-sdk/client-ssm";
+import jwt from "jsonwebtoken";
 
 export interface Sample {
   id?: number;
@@ -126,7 +130,11 @@ export function buildSamples(dbRows: any[]): Sample[] {
 
 export async function insertSample(
   client: PoolClient,
-  sampleData: any
+  sampleData: any,
+  event: APIGatewayEvent,
+  isBatchUpload: boolean = false,
+  batchUploadOriginalFName: string = "",
+  batchUploadS3Uri: string = ""
 ): Promise<QueryResult> {
   const fieldNames: string[] = [];
   const fieldValues: string[] = [];
@@ -134,7 +142,10 @@ export async function insertSample(
 
   let cIndex = 1;
 
-  if ("locationRectangleBounds" in sampleData) {
+  if (
+    "locationRectangleBounds" in sampleData &&
+    sampleData.locationRectangleBounds != null
+  ) {
     const bounds = sampleData.locationRectangleBounds;
 
     fieldNames.push("location_rectangle_south");
@@ -158,7 +169,8 @@ export async function insertSample(
 
   for (let prop of Object.keys(sampleData)) {
     if (prop in PROP_FILED_MAP == false) {
-      throw new Error(`Invalid property: ${prop}`);
+      // throw new Error(`Invalid property: ${prop}`);
+      continue;
     }
 
     const field = PROP_FILED_MAP[prop];
@@ -208,6 +220,48 @@ export async function insertSample(
   if (fieldNames.length == 0) {
     throw new Error("No valid fields in a sample to be added");
   }
+
+  //add system fields
+  // sys_is_active
+  // sys_create_timestamp
+  // sys_create_user_uuid
+  // sys_is_batch_upload
+  // sys_batch_upload_s3_uri
+  // sys_batch_upload_original_fname
+  // sys_delete_timestamp
+  // sys_delete_user_uuid
+
+  fieldNames.push("sys_is_active");
+  fieldValues.push(`$${cIndex++}`);
+  values.push(true);
+
+  fieldNames.push("sys_create_timestamp");
+  fieldValues.push(`$${cIndex++}`);
+  values.push(new Date().toISOString());
+
+  fieldNames.push("sys_create_user_uuid");
+  fieldValues.push(`$${cIndex++}`);
+  values.push(getUserUUID(event));
+
+  fieldNames.push("sys_is_batch_upload");
+  fieldValues.push(`$${cIndex++}`);
+  values.push(isBatchUpload);
+
+  fieldNames.push("sys_batch_upload_s3_uri");
+  fieldValues.push(`$${cIndex++}`);
+  values.push(batchUploadS3Uri);
+
+  fieldNames.push("sys_batch_upload_original_fname");
+  fieldValues.push(`$${cIndex++}`);
+  values.push(batchUploadOriginalFName);
+
+  // fieldNames.push("sys_delete_timestamp");
+  // fieldValues.push(`$${cIndex++}`);
+  // values.push(true);
+
+  // fieldNames.push("sys_delete_user_uuid");
+  // fieldValues.push(`$${cIndex++}`);
+  // values.push(true);
 
   const query = `insert into sample(${fieldNames.join(
     ","
@@ -460,4 +514,21 @@ export async function getSSMParameter(ssm: SSM, parameterName: string) {
 
   const data = await ssm.getParameter(params);
   return data.Parameter?.Value;
+}
+
+export function getUserUUID(event: APIGatewayEvent): string {
+  const token: string | undefined = event.headers?.Authorization?.substring(
+    "Bearer ".length
+  );
+
+  if (!token) {
+    throw new Error("Authorization token is missing");
+  }
+
+  try {
+    const decodedToken = jwt.decode(token, { complete: true });
+    return (decodedToken?.payload as jwt.JwtPayload).sub!;
+  } catch (error) {
+    throw new Error("Invalid JWT token or missing sub claim");
+  }
 }

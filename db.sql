@@ -28,6 +28,14 @@ CREATE TABLE sample (
   location_rectangle_east DOUBLE PRECISION,
   location_marker_lat DOUBLE PRECISION,
   location_marker_lng DOUBLE PRECISION,
+  sys_is_active BOOLEAN DEFAULT TRUE NOT NULL,
+  sys_create_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  sys_create_user_uuid VARCHAR(255) NOT NULL,
+  sys_is_batch_upload BOOLEAN DEFAULT FALSE NOT NULL,
+  sys_batch_upload_s3_uri VARCHAR(255),
+  sys_batch_upload_original_fname VARCHAR(255),
+  sys_delete_timestamp TIMESTAMP,
+  sys_delete_user_uuid VARCHAR(255),
   CONSTRAINT uk_sample_id UNIQUE (sample_id)
 );
 

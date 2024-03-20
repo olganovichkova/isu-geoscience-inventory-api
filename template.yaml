@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
 Globals:
@@ -13,7 +13,6 @@ Globals:
         DB_NAME: !Ref DBName
 
 Parameters:
-
   StackBaseName:
     Type: String
     Default: "isu-geo"
@@ -34,22 +33,21 @@ Parameters:
   DBSecretKey:
     Type: String
     Default: "/isu-geo/default/postgres/credentials"
-  
-  WebAppRedirectUrl:
+
+  WebAppRedirectURL:
     Type: String
     Default: "http://localhost:3000/login"
 
 Resources:
-
   S3DataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName:  !Sub "${StackBaseName}-data-${StackEnvironment}" 
+      BucketName: !Sub "${StackBaseName}-data-${StackEnvironment}"
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders: ["*"]
             AllowedOrigins: ["*"]
-            AllowedMethods: [GET, PUT, POST]            
+            AllowedMethods: [GET, PUT, POST]
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -57,11 +55,11 @@ Resources:
       GroupDescription: "Security group for RDS instance"
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 5432  
+          FromPort: 5432
           ToPort: 5432
-          CidrIp: "0.0.0.0/0" 
+          CidrIp: "0.0.0.0/0"
 
-  RDS:  
+  RDS:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier: !Sub "${StackBaseName}-db-${StackEnvironment}"
@@ -70,8 +68,24 @@ Resources:
       Engine: postgres
       PubliclyAccessible: true
       DBName: !Ref DBName
-      MasterUsername: !Join [ "", [ "{{resolve:secretsmanager:", !Ref DBSecretKey, ":SecretString:username}}" ] ]
-      MasterUserPassword: !Join [ "", [ "{{resolve:secretsmanager:", !Ref DBSecretKey, ":SecretString:password}}" ] ]
+      MasterUsername:
+        !Join [
+          "",
+          [
+            "{{resolve:secretsmanager:",
+            !Ref DBSecretKey,
+            ":SecretString:username}}",
+          ],
+        ]
+      MasterUserPassword:
+        !Join [
+          "",
+          [
+            "{{resolve:secretsmanager:",
+            !Ref DBSecretKey,
+            ":SecretString:password}}",
+          ],
+        ]
       VPCSecurityGroups:
         - !GetAtt RDSSecurityGroup.GroupId
     DeletionPolicy: Snapshot
@@ -96,16 +110,16 @@ Resources:
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
-      Domain:  !Sub "${StackBaseName}-${StackEnvironment}"
+      Domain: !Sub "${StackBaseName}-${StackEnvironment}"
       UserPoolId: !Ref UserPool
 
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
-    DependsOn: 
+    DependsOn:
       - UserPool
       - API
     Properties:
-      ClientName: !Sub "${StackBaseName}-userpool-client-${StackEnvironment}" 
+      ClientName: !Sub "${StackBaseName}-userpool-client-${StackEnvironment}"
       UserPoolId: !Ref UserPool
       GenerateSecret: false
       ExplicitAuthFlows:
@@ -124,7 +138,7 @@ Resources:
   API:
     Type: AWS::Serverless::Api
     Properties:
-      Name: !Sub "${StackBaseName}-apigateway-${StackEnvironment}" 
+      Name: !Sub "${StackBaseName}-apigateway-${StackEnvironment}"
       StageName: !Ref StackEnvironment
       Cors:
         AllowMethods: "'GET,POST,DELETE,OPTIONS'"
@@ -157,8 +171,8 @@ Resources:
         Minify: true
         Target: "es2020"
         Sourcemap: true
-        EntryPoints: 
-        - GetSample.ts
+        EntryPoints:
+          - GetSample.ts
 
   ListSamples:
     Type: AWS::Serverless::Function
@@ -182,8 +196,8 @@ Resources:
         Minify: true
         Target: "es2020"
         Sourcemap: true
-        EntryPoints: 
-        - ListSamples.ts
+        EntryPoints:
+          - ListSamples.ts
 
   AddSample:
     Type: AWS::Serverless::Function
@@ -201,14 +215,16 @@ Resources:
             RestApiId: !Ref API
             Path: /samples
             Method: POST
+            Auth:
+              Authorizer: APIAuthorizer
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
       BuildProperties:
         Minify: true
         Target: "es2020"
         Sourcemap: true
-        EntryPoints: 
-        - AddSample.ts
+        EntryPoints:
+          - AddSample.ts
 
   BatchSampleUpload:
     Type: AWS::Serverless::Function
@@ -222,7 +238,7 @@ Resources:
         - AmazonSSMReadOnlyAccess
       Environment:
         Variables:
-          DATA_BUCKET: !Ref S3DataBucket      
+          DATA_BUCKET: !Ref S3DataBucket
       Runtime: nodejs20.x
       Events:
         GetEvent:
@@ -231,14 +247,16 @@ Resources:
             RestApiId: !Ref API
             Path: /samples/upload/batch
             Method: POST
+            Auth:
+              Authorizer: APIAuthorizer
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
       BuildProperties:
         Minify: true
         Target: "es2020"
         Sourcemap: true
-        EntryPoints: 
-        - BatchSampleUpload.ts
+        EntryPoints:
+          - BatchSampleUpload.ts
 
   DeleteSample:
     Type: AWS::Serverless::Function
@@ -264,8 +282,8 @@ Resources:
         Minify: true
         Target: "es2020"
         Sourcemap: true
-        EntryPoints: 
-        - DeleteSample.ts
+        EntryPoints:
+          - DeleteSample.ts
 
   SearchByLocation:
     Type: AWS::Serverless::Function
@@ -289,8 +307,8 @@ Resources:
         Minify: true
         Target: "es2020"
         Sourcemap: true
-        EntryPoints: 
-        - SearchByLocation.ts
+        EntryPoints:
+          - SearchByLocation.ts
 
   SearchByFilters:
     Type: AWS::Serverless::Function
@@ -314,9 +332,8 @@ Resources:
         Minify: true
         Target: "es2020"
         Sourcemap: true
-        EntryPoints: 
-        - SearchByFilters.ts
-
+        EntryPoints:
+          - SearchByFilters.ts
 
   SearchFulltext:
     Type: AWS::Serverless::Function
@@ -340,9 +357,8 @@ Resources:
         Minify: true
         Target: "es2020"
         Sourcemap: true
-        EntryPoints: 
-        - SearchFulltext.ts
-
+        EntryPoints:
+          - SearchFulltext.ts
 
   APILogin:
     Type: AWS::Serverless::Function
@@ -352,7 +368,7 @@ Resources:
       Policies:
         - AWSLambdaBasicExecutionRole
         - SecretsManagerReadWrite
-        - AmazonCognitoPowerUser        
+        - AmazonCognitoPowerUser
       Runtime: nodejs20.x
       Events:
         GetEvent:
@@ -367,9 +383,8 @@ Resources:
         Minify: true
         Target: "es2020"
         Sourcemap: true
-        EntryPoints: 
-        - APILogin.ts
-
+        EntryPoints:
+          - APILogin.ts
 
   UILogin:
     Type: AWS::Serverless::Function
@@ -381,9 +396,6 @@ Resources:
         - SecretsManagerReadWrite
         - AmazonCognitoPowerUser
         - AmazonSSMReadOnlyAccess
-      Environment:
-        Variables:
-          WEB_APP_REDIRECT_URL: !Ref WebAppRedirectUrl
       Runtime: nodejs20.x
       Events:
         GetEvent:
@@ -398,9 +410,8 @@ Resources:
         Minify: true
         Target: "es2020"
         Sourcemap: true
-        EntryPoints: 
-        - UILogin.ts
-
+        EntryPoints:
+          - UILogin.ts
 
   GetPresignedURL:
     Type: AWS::Serverless::Function
@@ -414,7 +425,7 @@ Resources:
         - AmazonS3FullAccess
       Environment:
         Variables:
-          DATA_BUCKET: !Ref S3DataBucket      
+          DATA_BUCKET: !Ref S3DataBucket
       Runtime: nodejs20.x
       Events:
         GetEvent:
@@ -429,8 +440,8 @@ Resources:
         Minify: true
         Target: "es2020"
         Sourcemap: true
-        EntryPoints: 
-        - GetPresignedURL.ts
+        EntryPoints:
+          - GetPresignedURL.ts
 
   UserPoolIdParameter:
     Type: "AWS::SSM::Parameter"
@@ -458,7 +469,14 @@ Resources:
     Properties:
       Name: !Sub "/${StackBaseName}/${StackEnvironment}/api/endpoint"
       Type: "String"
-      Value: !Sub "https://${API}.execute-api.${AWS::Region}.amazonaws.com/${StackEnvironment}"     
+      Value: !Sub "https://${API}.execute-api.${AWS::Region}.amazonaws.com/${StackEnvironment}"
+
+  WebAppRedirectURLParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub "/${StackBaseName}/${StackEnvironment}/webapp/login/url"
+      Type: "String"
+      Value: !Ref WebAppRedirectURL
 
 Outputs:
   RDSEndpoint:
