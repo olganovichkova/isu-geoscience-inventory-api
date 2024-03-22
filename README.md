@@ -26,7 +26,16 @@ sudo npm install -g esbuild
 
 4. Run commands to install prerequisites.
 
+```bash
+sudo npm install -g ts-node
+sudo npm install -g esbuild
+```
+
 5. Clone the API github repository.
+
+```bash
+git clone [github_repo]
+```
 
 6. Direct to the projects root directory.
 
