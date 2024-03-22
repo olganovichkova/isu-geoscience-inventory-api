@@ -57,7 +57,7 @@ export const handler = async (
           `${filters[prop]}` != ""
         ) {
           conditions.push(`$${cIndex++} = ANY(${field.name})`);
-          values.push([filters[prop]]);
+          values.push(filters[prop]);
         }
       }
       conditions.push(`sys_is_active = TRUE`);

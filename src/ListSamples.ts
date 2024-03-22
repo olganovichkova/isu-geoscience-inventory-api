@@ -8,6 +8,7 @@ import {
   getPoolClient,
 } from "./Utils";
 
+//function to get ALL samples
 export const handler = async (
   event: APIGatewayEvent,
   context: Context
