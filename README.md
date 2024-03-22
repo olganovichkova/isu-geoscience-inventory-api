@@ -2,21 +2,7 @@
 
 REST API for the geoscience sample inventory at Idaho State University. This REST API is implemented in Typescript and this module is deployed as a serverless application.
 
-#### install prerequisites
-
-- install ts-node
-
-```bash
-sudo npm install -g ts-node
-```
-
-- install esbuild
-
-```bash
-sudo npm install -g esbuild
-```
-
-#### steps to deploy
+### Steps To Deploy
 
 1. Login to the AWS console.
 
@@ -24,7 +10,7 @@ sudo npm install -g esbuild
 
 3. open AWS CloudShell in the AWS console.
 
-4. Run commands to install prerequisites.
+4. Run commands to install prerequisites:
 
 ```bash
 sudo npm install -g ts-node
