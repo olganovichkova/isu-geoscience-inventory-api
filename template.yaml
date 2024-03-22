@@ -483,10 +483,10 @@ Outputs:
     Description: RDS Endpoint
     Value: !Sub "${RDS.Endpoint.Address}:${RDS.Endpoint.Port}"
     Export:
-      Name: RDSEndpoint
+      Name: !Sub "RDSEndpoint-${StackEnvironment}"
 
   APIEndpoint:
     Description: URL of the API endpoint
     Value: !Sub https://${API}.execute-api.${AWS::Region}.amazonaws.com/${StackEnvironment}/
     Export:
-      Name: APIEndpoint
+      Name: !Sub "APIEndpoint-${StackEnvironment}"
